@@ -1,0 +1,105 @@
+- name:  install zabbix-agent
+  user: root
+  gather_facts: false
+  vars:
+  - zbx: "zabbix_agentd.conf"
+  - Hostname: SZ-LG-Host{}
+  - zabbix_old: /usr/local/zabbix-2.4.2
+  - zabbix_dir: /usr/local/zabbix
+  - dir: /usr/local/zabbix
+  hosts: zabbix
+  tasks:
+  - name: yum libselinux-python
+    yum: state=present name=libselinux-python
+    ignore_errors: True
+  - name: tar zabbix-2.4.2.tar.gz
+    unarchive: src=/root/songchunhui/zabbix-2.4.2.tar.gz dest=/usr/local/
+    tags: lai
+  - name: create user
+    user: name=zabbix state=present
+  - name: yum gcc
+    yum: state=present name=gcc
+    ignore_errors: True
+  - name: configure
+    shell: chdir={{zabbix_old}} ./configure --prefix={{zabbix_dir}} --enable-agent
+  - name: make
+    shell: chdir={{zabbix_old}} make
+  - name: make install
+    shell: chdir={{zabbix_old}} make install
+  - name: file chmod
+    file: path={{zabbix_dir}}/ owner=zabbix group=zabbix recurse=yes
+  - name: copy zabbix_agentd
+    shell: cp -fr /usr/local/zabbix-2.4.2/misc/init.d/fedora/core/zabbix_agentd /etc/init.d/
+  - name: chmod 755 zabbix_agentd
+    file: path=/etc/init.d/zabbix_agentd mode=755
+  - name: setenforce 0
+    shell: setenforce 0
+    ignore_errors: True
+  - name: sed selinux
+    lineinfile: dest=/etc/selinux/config regexp=SELINUX=enforcing  line=SELINUX=disabled
+    ignore_errors: True
+  - name: iptables stop
+    service: name=iptables state=stopped
+    ignore_errors: True
+  - name: chkconfig iptables off
+    shell: chkconfig iptables off
+    ignore_errors: True
+  - name: sed zabbix_agentd
+    lineinfile: dest=/etc/init.d/zabbix_agentd regexp=BASEDIR=/usr/local  line=BASEDIR=/usr/local/zabbix
+    tags: two
+  - name: crontab
+    cron: name="custom job" minute=*/10 hour=* day=* month=* weekday=* job="ntpdate cn.pool.ntp.org"
+    ignore_errors: True
+  - name: echo /etc/services
+    lineinfile: dest=/etc/services line={{item}}
+    with_items:
+      - "zabbix-agent      10050/tcp"
+      - "zabbix-agent      10050/udp"
+      - "zabbix-trapper    10051/tcp"
+      - "zabbix-trapper    10051/udp"
+    tags: song
+  - name: ifconfig hostname
+    shell: ip a | awk -F [./] '/scope global bond0/{print $3"."$4}'|xargs -I {} sed -i "s@Hostname=Zabbix server@Hostname={{Hostname}}@" /usr/local/zabbix/etc/zabbix_agentd.conf 
+  - name: sed server
+    lineinfile: dest=/usr/local/zabbix/etc/zabbix_agentd.conf regexp=Server=127.0.0.1  line=Server=172.16.4.12
+  - name: sed ServerActive
+    lineinfile: dest=/usr/local/zabbix/etc/zabbix_agentd.conf regexp=ServerActive=127.0.0.1  line=ServerActive=172.16.4.12:10051
+  - name: sed Timeout
+    lineinfile: dest=/usr/local/zabbix/etc/zabbix_agentd.conf regexp=Timeout=3  line=Timeout=30
+  - name: sed UnsafeUserParameters
+    lineinfile: dest=/usr/local/zabbix/etc/zabbix_agentd.conf regexp=UnsafeUserParameters=0  line=UnsafeUserParameters=1
+  - name: Include=/usr/local/zabbix/etc/userparams/zabbix_agentd.userparams.conf
+    lineinfile: dest=/usr/local/zabbix/etc/zabbix_agentd.conf line=Include=/usr/local/zabbix/etc/userparams/*.conf
+  - name: mkdir userparams
+    file: path=/usr/local/zabbix/etc/userparams state=directory
+  - name: touch zabbix_agentd.userparams.conf
+    file: path=/usr/local/zabbix/etc/userparams/zabbix_agentd.userparams.conf state=touch
+  - name: mkdir script
+    file: path=/usr/local/zabbix/script state=directory
+  - name: del {{zabbix_old}}
+    file: path={{zabbix_old}} state=absent
+    ignore_errors: True
+  - name: script
+    script: /root/songchunhui/speed.sh
+  - name: chkconfig --level 345 zabbix_agentd on
+    shell: chkconfig --level 345 zabbix_agentd on
+  - name: zabbix_agents tarted
+    service: name=zabbix_agentd state=started
+    tags: one
+  - name: add a cron task
+    cron: name='tcp connects message output' minute='*/1' job="/usr/sbin/ss -ant |awk '{s[$1]++} END {for (a in s){print a,s[a]}}' > /tmp/tcp_stats_1 && /bin/mv /tmp/tcp_stats_1 /tmp/tcp_stats"
+  - name: copy new config file
+    copy: src=/etc/ansible/yml/zabbix_tcpstata/tcpstat.conf dest={{ dir }}/etc/userparams/ owner=zabbix group=zabbix
+  - name: restart zabbix_agentd service
+    service: name=zabbix_agentd state=restarted
+  - name: add a cron task
+    cron: name='iostat message output' minute='*/1' job='/usr/bin/iostat -dtkx 1 4 > /tmp/iostat_output_1 && /bin/mv /tmp/iostat_output_1 /tmp/iostat_output'
+  - name: copy iostat script 
+    copy: src=/etc/ansible/yml/zabbix_io/iostat.sh dest={{ dir }}/script/iostat.sh owner=zabbix group=zabbix mode=0744
+    tags: test9
+  - name: copy iostat discovery script 
+    copy: src=/etc/ansible/yml/zabbix_io/iostat_dev_discovery.sh dest={{ dir }}/script/iostat_dev_discovery.sh owner=zabbix group=zabbix mode=0744
+  - name: copy new config file
+    copy: src=/etc/ansible/yml/zabbix_io/disk_part_discovery.conf dest={{ dir }}/etc/userparams/ owner=zabbix group=zabbix
+  - name: restart zabbix_agentd service
+    service: name=zabbix_agentd state=restarted
