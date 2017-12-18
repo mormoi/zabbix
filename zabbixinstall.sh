@@ -9,10 +9,10 @@
 #  Config  script variable 
 #######################################################################################################################################
 
-zabbix_source_code="./zabbix-3.2.6.tar.gz"
-zabbix_source_code_unzip_directory="./zabbix-3.2.6/"
+zabbix_source_code="./zabbix-3.4.2.tar.gz"
+zabbix_source_code_unzip_directory="./zabbix-3.4.2/"
 zabbix_deploy_directory="/oma/deploy/zabbix/"
-zabbix_initial_setup_directory="${zabbix_deploy_directory}zabbix-3.2.6/"
+zabbix_initial_setup_directory="${zabbix_deploy_directory}zabbix-3.4.2/"
 zabbix_server_setup_directory="/usr/local/zabbix-server/"
 
 zabbix_database_username="zabbix"
@@ -100,8 +100,7 @@ function install_base_package() {
 echo
 echo "############################################################################"
 echo "install OS-based package ---------------------------------------------------"
-yum -y install gcc  net-snmp-devel net-snmp net-snmp-utils OpenIPMI-devel curl-devel perl-DBI  libxml2  libxml2-python libxml2-devel libcurl-devel
-previous_command_result_error_interactive_choose
+yum -y install gcc  net-snmp-devel net-snmp net-snmp-utils OpenIPMI-devel curl-devel perl-DBI  libxml2  libxml2-python libxml2-devel libcurl-devel previous_command_result_error_interactive_choose libevent-devel pcre-devel
 echo "package installation completed ---------------------------------------------"
 echo "############################################################################"
 echo
@@ -149,8 +148,7 @@ function install_php() {
 echo
 echo "############################################################################"
 echo "install php ----------------------------------------------------------------"
-yum -y install  php php-mysql php-gd php-bcmath php-xml php-mbstring php-snmp
-previous_command_result_error_interactive_choose
+yum -y install  php php-mysql php-gd php-bcmath php-xml php-mbstring php-snmp previous_command_result_error_interactive_choose
 echo "php installation completed -------------------------------------------------"
 echo "############################################################################"
 echo
@@ -207,6 +205,8 @@ $ZBX_SERVER_NAME  = '';
 $IMAGE_FORMAT_DEFAULT = IMAGE_FORMAT_PNG;
 ?>
 EOF
+sed -i "s/\$zabbix_database_username/${zabbix_database_username}/g" /var/www/zabbix/conf/zabbix.conf.php
+sed -i "s/\$zabbix_database_password/${zabbix_database_password}/g" /var/www/zabbix/conf/zabbix.conf.php
 previous_command_result_error_interactive_choose
 setfacl -R -m g:apache:rwx /var/www/zabbix/
 previous_command_result_error_interactive_choose
